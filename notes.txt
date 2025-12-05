@@ -1,0 +1,32 @@
+input -> Lexer -> tokens -> Parser
+
+grammer hieratchy
+expr -> term ((+ | -) term)      <- lowest precedence
+term -> factor ((* | / ) factor) <- mid precedence
+factor -> INT | FLOAT            <- highest precedence
+
+"3 + 4 * 2" -> 
+[Token(TT_INT, 3), Token(TT_PLUS), Token(TT_INT, 4), 
+Token(TT_MUL), Token(TT_INT, 2)] -> 
+BinOpNode(
+    left: NumberNode(3),
+    op: Token(TT_PLUS),
+    right: BinOpNode(
+        left: NumberNode(4),
+        op: Token(TT_MUL),
+        right: NumberNode(2)
+    )
+)
+
+           PLUS
+          /    \
+         /      \
+        3        MUL
+               /    \
+              /      \
+             4        2 need to work up tree, multiplication gets done first 
+
+new gram rules:
+expr -> VAR ID EQ expr,  term ((+ | -) term)      <- lowest precedence
+term -> factor ((* | / ) factor) <- mid precedence
+factor -> INT | FLOAT            <- highest precedence
