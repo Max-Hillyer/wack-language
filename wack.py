@@ -50,6 +50,11 @@ class RTError(Error):
         return "Traceback (most recent call last):\n" + result
 
 
+class CharError(Error):
+    def __init__(self, pos_start, pos_end, details=""):
+        super().__init__(pos_start, pos_end, "expected char", details)
+
+
 class Position:
     def __init__(self, idx, ln, col, fn, ftxt):
         self.idx = idx
@@ -85,7 +90,14 @@ TT_POW = "POW"
 TT_ID = "ID"
 TT_KEYWORD = "KEYWORD"
 TT_EQ = "EQ"
-KEYWORDS = ["LET"]
+TT_EE = "EE"
+TT_NE = "NE"
+TT_GT = "GT"
+TT_LT = "LT"
+TT_LTE = "LTE"
+TT_GTE = "GTE"
+
+KEYWORDS = ["LET", "AND", "OR", "NOT"]
 
 
 class Token:
@@ -141,7 +153,7 @@ class Lexer:
         tokens = []
 
         while self.current_char != None:
-            if self.current_char in " \t":
+            if self.current_char in " \t\n":
                 self.advance()
             elif self.current_char in DIGITS:
                 tokens.append(self.make_number())
@@ -167,10 +179,18 @@ class Lexer:
                 tokens.append(Token(TT_RPAREN, pos_start=self.pos))
                 self.advance()
             elif self.current_char == "=":
-                tokens.append(Token(TT_EQ, pos_start=self.pos))
-                self.advance()
+                tokens.append(self.make_EQ())
+            elif self.current_char == "<":
+                tokens.append(self.make_LT())
+            elif self.current_char == ">":
+                tokens.append(self.make_GT())
             elif self.current_char.isalpha():
                 tokens.append(self.make_id())
+            elif self.current_char == "!":
+                tok, error = self.make_NE()
+                if error:
+                    return [], error
+                tokens.append(tok)
             else:
                 pos_start = self.pos.copy()
                 char = self.current_char
@@ -179,6 +199,43 @@ class Lexer:
 
         tokens.append(Token(TT_EOF, pos_start=self.pos))
         return tokens, None
+
+    def make_NE(self):
+        pos_start = self.pos.copy()
+        self.advance()
+
+        if self.current_char == "=":
+            self.advance()
+            return Token(TT_NE, pos_start=pos_start, pos_end=self.pos), None
+        self.advance()
+        return None, CharError(pos_start, self.pos, "'=' after !")
+
+    def make_EQ(self):
+        pos_start = self.pos.copy()
+        self.advance()
+
+        if self.current_char == "=":
+            self.advance()
+            return Token(TT_EE, pos_start=pos_start, pos_end=self.pos)
+        return Token(TT_EQ, pos_start=pos_start, pos_end=self.pos)
+
+    def make_LT(self):
+        pos_start = self.pos.copy()
+        self.advance()
+
+        if self.current_char == "=":
+            self.advance()
+            return Token(TT_LTE, pos_start=pos_start, pos_end=self.pos)
+        return Token(TT_LT, pos_start=pos_start, pos_end=self.pos)
+
+    def make_GT(self):
+        pos_start = self.pos.copy()
+        self.advance()
+
+        if self.current_char == "=":
+            self.advance()
+            return Token(TT_GTE, pos_start=pos_start, pos_end=self.pos)
+        return Token(TT_GT, pos_start=pos_start, pos_end=self.pos)
 
     def make_number(self):
         num_str = ""
@@ -343,7 +400,28 @@ class Parser:
         return self.bin_op(self.pow, (TT_MUL, TT_DIV))
 
     def pow(self):
-        return self.bin_op(self.factor, (TT_POW))
+        return self.bin_op(self.factor, (TT_POW,))
+
+    def arith_expr(self):
+        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+
+    def comp_expr(self):
+        res = ParseResult()
+        if self.current_tok.matches(TT_KEYWORD, "NOT"):
+            op_tok = self.current_tok
+            self.advance()
+
+            node = res.register(self.comp_expr())
+            if res.error:
+                return res
+            return res.success(UnaryOpNode(op_tok, node))
+
+        node = res.register(
+            self.bin_op(self.arith_expr, (TT_EE, TT_NE, TT_LT, TT_GT, TT_GTE, TT_LTE))
+        )
+        if res.error:
+            return res
+        return res.success(node)
 
     def expr(self):
         res = ParseResult()
@@ -373,21 +451,38 @@ class Parser:
                 return res
             return res.success(VarAssignNode(name, expr))
 
-        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+        return self.bin_op(self.comp_expr, (TT_KEYWORD, "OR", TT_KEYWORD, "AND"))
 
-    def bin_op(self, func, ops):
+    def bin_op(self, func_a, ops, func_b=None):
+        if func_b == None:
+            func_b = func_a
+
         res = ParseResult()
-        left = res.register(func())
+        left = res.register(func_a())
         if res.error:
             return res
 
-        while self.current_tok.type in ops:
-            op_tok = self.current_tok
-            res.register(self.advance())
-            right = res.register(func())
-            if res.error:
-                return res
-            left = BinOpNode(left, op_tok, right)
+        while True:
+            if ops and isinstance(ops[0], tuple):
+                if self.current_tok.matches(ops[0][0], ops[0][1]):
+                    op_tok = self.current_tok
+                    res.register(self.advance())
+                    right = res.register(func_b())
+                    if res.error:
+                        return res
+                    left = BinOpNode(left, op_tok, right)
+                else:
+                    break
+            else:
+                if self.current_tok.type in ops:
+                    op_tok = self.current_tok
+                    res.register(self.advance())
+                    right = res.register(func_b())
+                    if res.error:
+                        return res
+                    left = BinOpNode(left, op_tok, right)
+                else:
+                    break
 
         return res.success(left)
 
@@ -450,8 +545,53 @@ class Number:
     def powed_by(self, other):
         if isinstance(other, Number):
             if other.value == 0:
-                return 1
+                return Number(1).set_context(self.context), None
             return Number(self.value**other.value).set_context(self.set_context), None
+
+    def get_comp_eq(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value == other.value)).set_context(
+                self.context
+            ), None
+
+    def get_comp_ne(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value != other.value)).set_context(
+                self.context
+            ), None
+
+    def get_comp_lt(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value < other.value)).set_context(self.context), None
+
+    def get_comp_gt(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value > other.value)).set_context(self.context), None
+
+    def get_comp_lte(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value <= other.value)).set_context(
+                self.context
+            ), None
+
+    def get_comp_gte(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value >= other.value)).set_context(
+                self.context
+            ), None
+
+    def anded_by(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value and other.value)).set_context(
+                self.context
+            ), None
+
+    def ored_by(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value or other.value)).set_context(self.context),None
+
+    def notted(self):
+        return Number(1 if self.value == 0 else 0).set_context(self.context), None
 
     def __repr__(self):
         return str(self.value)
@@ -518,6 +658,22 @@ class Interpreter:
             result, error = left.dived_by(right)
         elif node.op_tok.type == TT_POW:
             result, error = left.powed_by(right)
+        elif node.op_tok.type == TT_EE:
+            result, error = left.get_comp_eq(right)
+        elif node.op_tok.type == TT_NE:
+            result, error = left.get_comp_ne(right)
+        elif node.op_tok.type == TT_LT:
+            result, error = left.get_comp_lt(right)
+        elif node.op_tok.type == TT_GT:
+            result, error = left.get_comp_gt(right)
+        elif node.op_tok.type == TT_LTE:
+            result, error = left.get_comp_lte(right)
+        elif node.op_tok.type == TT_GTE:
+            result, error = left.get_comp_gte(right)
+        elif node.op_tok.matches(TT_KEYWORD, "AND"):
+            result, error = left.anded_by(right)
+        elif node.op_tok.matches(TT_KEYWORD, "OR"):
+            result, error = left.ored_by(right)
 
         if error:
             return res.failure(error)
@@ -563,6 +719,8 @@ class Interpreter:
 
 
 symbol_table = SymbolTable()
+symbol_table.set("FALSE", Number(0))
+symbol_table.set("TRUE", Number(1))
 
 
 def run(fn, text):
