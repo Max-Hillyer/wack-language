@@ -477,7 +477,20 @@ class Parser:
         return self.bin_op(self.pow, (TT_MUL, TT_DIV))
 
     def pow(self):
-        return self.bin_op(self.factor, (TT_POW,))
+        res = ParseResult()
+        left = res.register(self.factor())
+        if res.error:
+            return res
+
+        if self.current_tok.type == TT_POW:
+            op_tok = self.current_tok
+            res.register(self.advance())
+            right = res.register(self.pow())
+            if res.error:
+                return res
+            left = BinOpNode(left, op_tok, right)
+
+        return res.success(left)
 
     def arith_expr(self):
         return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
@@ -827,20 +840,20 @@ symbol_table.set("FALSE", Number(0))
 symbol_table.set("TRUE", Number(1))
 
 
-# def run(fn, text):
-#     lexer = Lexer(fn, text)
-#     tokens, error = lexer.make_tokens()  # tokenize
-#     if error:
-#         return None, error
+def run(fn, text):
+    lexer = Lexer(fn, text)
+    tokens, error = lexer.make_tokens()  # tokenize
+    if error:
+        return None, error
 
-#     parser = Parser(tokens)
-#     ast = parser.parse()  # convert to ast tree
-#     if ast.error:
-#         return None, ast.error
+    parser = Parser(tokens)
+    ast = parser.parse()  # convert to ast tree
+    if ast.error:
+        return None, ast.error
 
-#     interpreter = Interpreter()
-#     context = Context("<program>")  # compile
-#     context.symbol_table = symbol_table
-#     result = interpreter.visit(ast.node, context)
+    interpreter = Interpreter()
+    context = Context("<program>")  # compile
+    context.symbol_table = symbol_table
+    result = interpreter.visit(ast.node, context)
 
-#     return result.value, result.error
+    return result.value, result.error

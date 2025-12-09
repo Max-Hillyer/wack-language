@@ -39,3 +39,14 @@ if len(sys.argv) > 1:
 
     except FileNotFoundError:
         print(f"error: {fname} not found")
+else:
+    while True:
+        text = input("wack> ")
+        if text == "cutitout":
+            break
+        result, error = wack.run("<stdin>", text)
+
+        if error:
+            print(error.as_string())
+        elif result:
+            print(result)
