@@ -97,7 +97,7 @@ TT_LT = "LT"
 TT_LTE = "LTE"
 TT_GTE = "GTE"
 
-KEYWORDS = ["LET", "AND", "OR", "NOT"]
+KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO"]
 
 
 class Token:
@@ -310,6 +310,15 @@ class VarAssignNode:
         self.pos_end = val_node.pos_end
 
 
+class IfNode:
+    def __init__(self, cases, else_case):
+        self.cases = cases
+        self.else_case = else_case
+
+        self.pos_start = self.cases[0][0].pos_start
+        self.pos_end = self.else_case or self.cases[-1][0].pos_end
+
+
 class ParseResult:
     def __init__(self):
         self.error = None
@@ -356,6 +365,69 @@ class Parser:
             )
         return res
 
+    def if_expr(self):
+        res = ParseResult()
+        cases = []
+        else_case = None
+
+        if not self.current_tok.matches(TT_KEYWORD, "IF"):
+            return res.failure(
+                InvalidSyntaxError(
+                    self.current_tok.pos_start,
+                    self.current_tok.pos_end,
+                    f"Expected 'IF'",
+                )
+            )
+
+        self.advance()
+        cond = res.register(self.expr())
+        if res.error:
+            return res
+
+        if not self.current_tok.matches(TT_KEYWORD, "DO"):
+            return res.failure(
+                InvalidSyntaxError(
+                    self.current_tok.pos_start,
+                    self.current_tok.pos_end,
+                    f"Expected 'DO'",
+                )
+            )
+
+        self.advance()
+        expr = res.register(self.expr())
+        if res.error:
+            return res
+        cases.append((cond, expr))
+
+        while self.current_tok.matches(TT_KEYWORD, "ELIF"):
+            self.advance()
+
+            cond = res.register(self.expr())
+            if res.error:
+                return res
+            if not self.current_tok.matches(TT_KEYWORD, "DO"):
+                return res.failure(
+                    InvalidSyntaxError(
+                        self.current_tok.pos_start,
+                        self.current_tok.pos_end,
+                        f"Expected 'DO'",
+                    )
+                )
+
+            self.advance()
+
+            expr = res.register(self.expr())
+            if res.error:
+                return res
+            cases.append((cond, expr))
+
+        if self.current_tok.matches(TT_KEYWORD, "ELSE"):
+            self.advance()
+            else_case = res.register(self.expr())
+            if res.error:
+                return res
+        return res.success(IfNode(cases, else_case))
+
     def factor(self):
         res = ParseResult()
         tok = self.current_tok
@@ -391,6 +463,11 @@ class Parser:
                         "Expected ')'",
                     )
                 )
+        elif tok.matches(TT_KEYWORD, "IF"):
+            if_expr = res.register(self.if_expr())
+            if res.error:
+                return res
+            return res.success(if_expr)
 
         return res.failure(
             InvalidSyntaxError(tok.pos_start, tok.pos_end, "Expected int or float")
@@ -451,7 +528,7 @@ class Parser:
                 return res
             return res.success(VarAssignNode(name, expr))
 
-        return self.bin_op(self.comp_expr, (TT_KEYWORD, "OR", TT_KEYWORD, "AND"))
+        return self.bin_op(self.comp_expr, ((TT_KEYWORD, "AND"), (TT_KEYWORD, "OR")))
 
     def bin_op(self, func_a, ops, func_b=None):
         if func_b == None:
@@ -588,10 +665,15 @@ class Number:
 
     def ored_by(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value or other.value)).set_context(self.context),None
+            return Number(int(self.value or other.value)).set_context(
+                self.context
+            ), None
 
     def notted(self):
         return Number(1 if self.value == 0 else 0).set_context(self.context), None
+
+    def is_true(self):
+        return self.value != 0
 
     def __repr__(self):
         return str(self.value)
@@ -680,6 +762,26 @@ class Interpreter:
         else:
             return res.success(result.set_pos(node.pos_start, node.pos_end))
 
+    def visit_IfNode(self, node, context):
+        res = RTResult()
+        for cond, expr in node.cases:
+            cond_val = res.register(self.visit(cond, context))
+            if res.error:
+                return res
+
+            if cond_val.is_true():
+                expr_value = res.register(self.visit(expr, context))
+                if res.error:
+                    return res
+                return res.success(expr_value)
+
+        if node.else_case:
+            else_value = res.register(self.visit(node.else_case, context))
+            if res.error:
+                return res
+            return res.success(else_value)
+        return res.success(None)
+
     def visit_UnaryOpNode(self, node, context):
         res = RTResult()
         number = res.register(self.visit(node.node, context))
@@ -690,6 +792,8 @@ class Interpreter:
 
         if node.op_tok.type == TT_MINUS:
             number, error = number.multed_by(Number(-1))
+        elif node.op_tok.matches(TT_KEYWORD, "NOT"):
+            number, error = number.notted()
 
         if error:
             return res.failure(error)
@@ -723,20 +827,20 @@ symbol_table.set("FALSE", Number(0))
 symbol_table.set("TRUE", Number(1))
 
 
-def run(fn, text):
-    lexer = Lexer(fn, text)
-    tokens, error = lexer.make_tokens()  # tokenize
-    if error:
-        return None, error
+# def run(fn, text):
+#     lexer = Lexer(fn, text)
+#     tokens, error = lexer.make_tokens()  # tokenize
+#     if error:
+#         return None, error
 
-    parser = Parser(tokens)
-    ast = parser.parse()  # convert to ast tree
-    if ast.error:
-        return None, ast.error
+#     parser = Parser(tokens)
+#     ast = parser.parse()  # convert to ast tree
+#     if ast.error:
+#         return None, ast.error
 
-    interpreter = Interpreter()
-    context = Context("<program>")  # compile
-    context.symbol_table = symbol_table
-    result = interpreter.visit(ast.node, context)
+#     interpreter = Interpreter()
+#     context = Context("<program>")  # compile
+#     context.symbol_table = symbol_table
+#     result = interpreter.visit(ast.node, context)
 
-    return result.value, result.error
+#     return result.value, result.error

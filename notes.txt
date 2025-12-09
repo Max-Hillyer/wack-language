@@ -38,3 +38,5 @@ power		: atom (POW factor)*
 
 atom 		: INT|FLOAT|IDENTIFIER
 				: LPAREN expr RPAREN
+
+IF {condition} DO {expression}
