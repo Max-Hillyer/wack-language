@@ -96,6 +96,8 @@ TT_LT = "LT"
 TT_LTE = "LTE"
 TT_GTE = "GTE"
 TT_MOD = "MOD"
+TT_PP = "DUBPLUS"
+TT_MM = "DUBMIN"
 
 KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN", "SHOW"]
 
@@ -158,11 +160,9 @@ class Lexer:
             elif self.current_char in DIGITS:
                 tokens.append(self.make_number())
             elif self.current_char == "+":
-                tokens.append(Token(TT_PLUS, pos_start=self.pos))
-                self.advance()
+                tokens.append(self.make_plus())
             elif self.current_char == "-":
-                tokens.append(Token(TT_MINUS, pos_start=self.pos))
-                self.advance()
+                tokens.append(self.make_minus())
             elif self.current_char == "*":
                 tokens.append(Token(TT_MUL, pos_start=self.pos))
                 self.advance()
@@ -203,6 +203,24 @@ class Lexer:
         tokens.append(Token(TT_EOF, pos_start=self.pos))
         return tokens, None
 
+    def make_plus(self):
+        pos_start = self.pos.copy()
+        self.advance()
+
+        if self.current_char == "+":
+            self.advance()
+            return Token(TT_PP, pos_start=pos_start, pos_end=self.pos)
+        return Token(TT_PLUS, pos_start = pos_start, pos_end=self.pos)
+
+    def make_minus(self):
+        pos_start = self.pos.copy()
+        self.advance()
+
+        if self.current_char == "-":
+            self.advance()
+            return Token(TT_MM, pos_start=pos_start, pos_end=self.pos)
+        return Token(TT_MINUS, pos_start=pos_start, pos_end=self.pos)
+    
     def make_NE(self):
         pos_start = self.pos.copy()
         self.advance()
@@ -323,10 +341,10 @@ class IfNode:
 
 
 class ForNode:
-    def __init__(self, iterator, length, expr):
+    def __init__(self, iterator, length, exprs):
         self.iterator = iterator
         self.length = length
-        self.expr = expr
+        self.expr = exprs
 
         self.pos_start = self.iterator.pos_start
         self.pos_end = self.expr.pos_end
@@ -500,7 +518,7 @@ class Parser:
         res = ParseResult()
         tok = self.current_tok
 
-        if tok.type in (TT_PLUS, TT_MINUS):
+        if tok.type in (TT_PLUS, TT_MINUS, TT_PP, TT_MM):
             res.register(self.advance())
             factor = res.register(self.factor())
             if res.error:
@@ -567,7 +585,7 @@ class Parser:
         return res.success(left)
 
     def arith_expr(self):
-        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+        return self.bin_op(self.term, (TT_PLUS, TT_MINUS, TT_PP, TT_MM))
 
     def comp_expr(self):
         res = ParseResult()
@@ -919,7 +937,8 @@ class Interpreter:
 
             results.append(result)
 
-        return res.success(results[-1] if results else Number(0))
+        non_none_results = [r for r in results if r is not None]
+        return res.success(non_none_results[-1] if non_none_results else Number(0))
 
     def visit_UnaryOpNode(self, node, context):
         res = RTResult()
@@ -931,6 +950,10 @@ class Interpreter:
 
         if node.op_tok.type == TT_MINUS:
             number, error = number.multed_by(Number(-1))
+        elif node.op_tok.type == TT_PP:
+            number, error = number.added_to(Number(1))
+        elif node.op_tok.type == TT_MM:
+            number, error = number.subbed_by(Number(1))
         elif node.op_tok.matches(TT_KEYWORD, "NOT"):
             number, error = number.notted()
 
@@ -965,7 +988,8 @@ class Interpreter:
         val = res.register(self.visit(node.expr, context))
         if res.error:
             return res
-        return res.success(val, show=True)
+        print(val) 
+        return res.success(None) 
 
 
 symbol_table = SymbolTable()

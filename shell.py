@@ -6,7 +6,12 @@ if len(sys.argv) > 1:
     fname = sys.argv[1]
     try:
         with open(fname, "r") as f:
-            lines = [line.strip() for line in f.readlines() if line.strip()]
+            res = ""
+            for i in f.read():
+                if i not in "\n":
+                    res+=i
+            lines = res.split(';')
+            lines.pop()
 
         asts = []
         for line in lines:
