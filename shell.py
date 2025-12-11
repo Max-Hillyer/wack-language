@@ -35,7 +35,7 @@ if len(sys.argv) > 1:
                 print(res.error.as_string())
                 sys.exit(1)
             result = res.value
-            if result:
+            if result and res.show:
                 print(result)
 
     except FileNotFoundError:

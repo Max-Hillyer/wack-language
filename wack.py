@@ -97,7 +97,7 @@ TT_LTE = "LTE"
 TT_GTE = "GTE"
 TT_MOD = "MOD"
 
-KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN"]
+KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN", "SHOW"]
 
 
 class Token:
@@ -330,6 +330,14 @@ class ForNode:
 
         self.pos_start = self.iterator.pos_start
         self.pos_end = self.expr.pos_end
+
+
+class ShowNode:
+    def __init__(self, expr):
+        self.expr = expr
+
+        self.pos_start = expr.pos_start
+        self.pos_end = expr.pos_end
 
 
 class ParseResult:
@@ -581,6 +589,14 @@ class Parser:
 
     def expr(self):
         res = ParseResult()
+
+        if self.current_tok.matches(TT_KEYWORD, "SHOW"):
+            res.register(self.advance())
+            expr = res.register(self.expr())
+            if res.error:
+                return res
+            return res.success(ShowNode(expr))
+
         if self.current_tok.matches(TT_KEYWORD, "LET"):
             res.register(self.advance())
             if self.current_tok.type != TT_ID:
@@ -647,14 +663,16 @@ class RTResult:
     def __init__(self):
         self.value = None
         self.error = None
+        self.show = None
 
     def register(self, res):
         if res.error:
             self.error = res.error
         return res.value
 
-    def success(self, value):
+    def success(self, value, show=False):
         self.value = value
+        self.show = show
         return self
 
     def failure(self, error):
@@ -900,8 +918,6 @@ class Interpreter:
                 return res
 
             results.append(result)
-            # if result is not None:
-            #     print(result)
 
         return res.success(results[-1] if results else Number(0))
 
@@ -943,6 +959,13 @@ class Interpreter:
 
         context.symbol_table.set(name, val)
         return res.success(val)
+
+    def visit_ShowNode(self, node, context):
+        res = RTResult()
+        val = res.register(self.visit(node.expr, context))
+        if res.error:
+            return res
+        return res.success(val, show=True)
 
 
 symbol_table = SymbolTable()
