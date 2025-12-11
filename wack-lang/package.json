@@ -1,0 +1,25 @@
+{
+  "name": "wack-lang",
+  "displayName": "Wack lang",
+  "description": "syntax highlighting for wack lang",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.107.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "wack",
+      "aliases": ["Wack", "wack"],
+      "extensions": [".wk"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "wack",
+      "scopeName": "source.wk",
+      "path": "./syntaxes/wack.tmLanguage.json"
+    }]
+  }
+}

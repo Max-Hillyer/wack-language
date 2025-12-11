@@ -1,3 +1,9 @@
-LET x = 10
-IF x == 11 DO 123 ELSE 321
-LET y = (x + 10)
+LET b = 10
+LET a = 20
+LET greatest = 0
+
+FOR i IN a DO IF (a % i == 0) AND (b % i == 0) AND (i > greatest) DO LET greatest = i
+
+greatest
+
+

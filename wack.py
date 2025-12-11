@@ -38,7 +38,6 @@ class RTError(Error):
         result = ""
         pos = self.pos_start
         ctx = self.context
-
         while ctx:
             result = (
                 f"  File {pos.fn}, line {str(pos.ln + 1)}, in {ctx.display_name}\n"
@@ -96,8 +95,9 @@ TT_GT = "GT"
 TT_LT = "LT"
 TT_LTE = "LTE"
 TT_GTE = "GTE"
+TT_MOD = "MOD"
 
-KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO"]
+KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN"]
 
 
 class Token:
@@ -153,7 +153,7 @@ class Lexer:
         tokens = []
 
         while self.current_char != None:
-            if self.current_char in " \t\n":
+            if self.current_char in " \t":
                 self.advance()
             elif self.current_char in DIGITS:
                 tokens.append(self.make_number())
@@ -177,6 +177,9 @@ class Lexer:
                 self.advance()
             elif self.current_char == ")":
                 tokens.append(Token(TT_RPAREN, pos_start=self.pos))
+                self.advance()
+            elif self.current_char == "%":
+                tokens.append(Token(TT_MOD, pos_start= self.pos))
                 self.advance()
             elif self.current_char == "=":
                 tokens.append(self.make_EQ())
@@ -318,6 +321,14 @@ class IfNode:
         self.pos_start = self.cases[0][0].pos_start
         self.pos_end = self.else_case or self.cases[-1][0].pos_end
 
+class ForNode:
+    def __init__(self, iterator, length, expr):
+        self.iterator = iterator 
+        self.length = length
+        self.expr = expr 
+
+        self.pos_start = self.iterator.pos_start
+        self.pos_end = self.expr.pos_end
 
 class ParseResult:
     def __init__(self):
@@ -428,6 +439,49 @@ class Parser:
                 return res
         return res.success(IfNode(cases, else_case))
 
+    def for_expr(self):
+        res = ParseResult() 
+
+        if not self.current_tok.matches(TT_KEYWORD, "FOR"):
+            return res.failure(
+                InvalidSyntaxError(
+                    self.current_tok.pos_start,
+                    self.current_tok.pos_end,
+                    f"Expected 'FOR'"
+                )
+            )
+        
+        self.advance()
+        iterator = res.register(self.expr())
+        if res.error: return res 
+
+        if not self.current_tok.matches(TT_KEYWORD, "IN"):
+            return res.failure(
+                InvalidSyntaxError(
+                    self.current_tok.pos_start,
+                    self.current_tok.pos_end,
+                    f"Expected 'IN'",
+                )
+            )
+
+        self.advance()
+        length = res.register(self.expr())
+        if res.error: return res 
+
+        if not self.current_tok.matches(TT_KEYWORD, "DO"):
+            return res.failure(
+                InvalidSyntaxError(
+                    self.current_tok.pos_start,
+                    self.current_tok.pos_end,
+                    f"Expected 'DO'",
+                )
+            )
+        
+        self.advance()
+        expr = res.register(self.expr())
+        if res.error: return res
+
+        return res.success(ForNode(iterator, length, expr))
     def factor(self):
         res = ParseResult()
         tok = self.current_tok
@@ -468,13 +522,18 @@ class Parser:
             if res.error:
                 return res
             return res.success(if_expr)
+        
+        elif tok.matches(TT_KEYWORD, "FOR"):
+            for_expr = res.register(self.for_expr())
+            if res.error: return res
+            return res.success(for_expr)
 
         return res.failure(
             InvalidSyntaxError(tok.pos_start, tok.pos_end, "Expected int or float")
         )
 
     def term(self):
-        return self.bin_op(self.pow, (TT_MUL, TT_DIV))
+        return self.bin_op(self.pow, (TT_MUL, TT_DIV, TT_MOD))
 
     def pow(self):
         res = ParseResult()
@@ -685,6 +744,15 @@ class Number:
     def notted(self):
         return Number(1 if self.value == 0 else 0).set_context(self.context), None
 
+    def modded_by(self, other):
+        if isinstance(other, Number):
+            if other.value == 0:
+                return None, RTError(
+                    other.pos_start, other.pos_end, "Division by zero", self.context
+                )
+
+            return Number(self.value % other.value).set_context(self.context), None
+        
     def is_true(self):
         return self.value != 0
 
@@ -769,6 +837,8 @@ class Interpreter:
             result, error = left.anded_by(right)
         elif node.op_tok.matches(TT_KEYWORD, "OR"):
             result, error = left.ored_by(right)
+        elif node.op_tok.type == TT_MOD:
+            result, error = left.modded_by(right)
 
         if error:
             return res.failure(error)
@@ -794,6 +864,39 @@ class Interpreter:
                 return res
             return res.success(else_value)
         return res.success(None)
+    
+    def visit_ForNode(self, node, context):
+        res = RTResult()
+        
+        var_name = node.iterator.name_tok.value
+        
+        length_val = res.register(self.visit(node.length, context))
+        if res.error:
+            return res
+        
+        if not isinstance(length_val, Number):
+            return res.failure(
+                RTError(
+                    node.length.pos_start,
+                    node.length.pos_end,
+                    "Length must be a number",
+                    context
+                )
+            )
+        
+        results = []
+        for i in range(1, int(length_val.value)):
+            context.symbol_table.set(var_name, Number(i))
+            
+            result = res.register(self.visit(node.expr, context))
+            if res.error:
+                return res
+            
+            results.append(result)
+            # if result is not None:
+            #     print(result)
+
+        return res.success(results[-1] if results else Number(0))
 
     def visit_UnaryOpNode(self, node, context):
         res = RTResult()
