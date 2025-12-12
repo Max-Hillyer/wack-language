@@ -9,8 +9,8 @@ if len(sys.argv) > 1:
             res = ""
             for i in f.read():
                 if i not in "\n":
-                    res+=i
-            lines = res.split(';')
+                    res += i
+            lines = res.split(";")
             lines.pop()
             lines = [i for i in lines if "//" not in i]
 

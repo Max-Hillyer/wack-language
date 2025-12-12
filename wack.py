@@ -99,7 +99,20 @@ TT_MOD = "MOD"
 TT_PP = "DUBPLUS"
 TT_MM = "DUBMIN"
 
-KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN", "SHOW", "END"]
+KEYWORDS = [
+    "LET",
+    "AND",
+    "OR",
+    "NOT",
+    "IF",
+    "ELIF",
+    "ELSE",
+    "DO",
+    "FOR",
+    "IN",
+    "SHOW",
+    "END",
+]
 
 
 class Token:
@@ -210,7 +223,7 @@ class Lexer:
         if self.current_char == "+":
             self.advance()
             return Token(TT_PP, pos_start=pos_start, pos_end=self.pos)
-        return Token(TT_PLUS, pos_start = pos_start, pos_end=self.pos)
+        return Token(TT_PLUS, pos_start=pos_start, pos_end=self.pos)
 
     def make_minus(self):
         pos_start = self.pos.copy()
@@ -220,7 +233,7 @@ class Lexer:
             self.advance()
             return Token(TT_MM, pos_start=pos_start, pos_end=self.pos)
         return Token(TT_MINUS, pos_start=pos_start, pos_end=self.pos)
-    
+
     def make_NE(self):
         pos_start = self.pos.copy()
         self.advance()
@@ -993,8 +1006,8 @@ class Interpreter:
         val = res.register(self.visit(node.expr, context))
         if res.error:
             return res
-        print(val) 
-        return res.success(None) 
+        print(val)
+        return res.success(None)
 
 
 symbol_table = SymbolTable()
