@@ -12,6 +12,7 @@ if len(sys.argv) > 1:
                     res+=i
             lines = res.split(';')
             lines.pop()
+            lines = [i for i in lines if "//" not in i]
 
         asts = []
         for line in lines:

@@ -99,7 +99,7 @@ TT_MOD = "MOD"
 TT_PP = "DUBPLUS"
 TT_MM = "DUBMIN"
 
-KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN", "SHOW"]
+KEYWORDS = ["LET", "AND", "OR", "NOT", "IF", "ELIF", "ELSE", "DO", "FOR", "IN", "SHOW", "END"]
 
 
 class Token:
@@ -465,6 +465,9 @@ class Parser:
             else_case = res.register(self.expr())
             if res.error:
                 return res
+        if self.current_tok.matches(TT_KEYWORD, "END"):
+            self.advance()
+
         return res.success(IfNode(cases, else_case))
 
     def for_expr(self):
@@ -512,6 +515,8 @@ class Parser:
         if res.error:
             return res
 
+        if self.current_tok.matches(TT_KEYWORD, "END"):
+            self.advance()
         return res.success(ForNode(iterator, length, expr))
 
     def factor(self):
@@ -928,7 +933,7 @@ class Interpreter:
             )
 
         results = []
-        for i in range(1, int(length_val.value)):
+        for i in range(1, int(length_val.value) + 1):
             context.symbol_table.set(var_name, Number(i))
 
             result = res.register(self.visit(node.expr, context))

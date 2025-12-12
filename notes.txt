@@ -40,3 +40,39 @@ atom 		: INT|FLOAT|IDENTIFIER
 				: LPAREN expr RPAREN
 
 IF {condition} DO {expression}
+
+FOR i In 20 DO IF 20 % i == 0 DO SHOW i 
+                                ForNode
+                                   |
+                +------------------+------------------+
+               /                   |                   \
+          iterator              length               expr
+       (VarAssignNode)       (NumberNode: 20)      (IfNode)
+             |                                         |
+        name: "i"                      +---------------+---------------+
+                                      /                                 \
+                                 Condition                          Expression
+                                (BinOpNode)                         (ShowNode)
+                                    |                                   |
+                            +-------+-------+                          expr
+                           /        |        \                  (VarAccessNode)
+                          /         |         \                      |
+                     BinOpNode     ==      NumberNode              "i"
+                     (op: %)               (value: 0)
+                        /|\
+                       / | \
+                      /  |  \
+                NumberNode % VarAccessNode
+                (value: 20)   (name: i)
+
+ForNode
+├── iterator: VarAssignNode (variable name: "i")
+├── length: NumberNode(20) 
+└── expr: IfNode
+    ├── Condition: BinOpNode (==)
+    │   ├── Left: BinOpNode (%)
+    │   │   ├── Left: NumberNode(20)
+    │   │   └── Right: VarAccessNode("i")
+    │   └── Right: NumberNode(0)
+    └── Expression: ShowNode
+        └── expr: VarAccessNode("i")

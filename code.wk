@@ -1,11 +1,30 @@
-LET b = 10;
-LET a = 20;
+//this code takes the GCF of b and a;
+// also these are comments;
+// annoyingly, comments also need semicolons. I probably wont fix this;
+
+LET b = 45;
+LET a = 81;
 LET greatest = 0;
 
-FOR i IN a DO 
-IF a % i == 0 AND b % i == 0 AND i > greatest DO 
-LET greatest = i;
+IF a > b DO
+ FOR i IN a DO
+   IF a % i == 0 AND b % i == 0 AND i > greatest DO
+     LET greatest = i
+   END
+  END
+ ELSE
+ FOR j IN b DO 
+ IF b % j == 0 AND a % j == 0 AND j > greatest DO 
+    LET greatest = j
+    END 
+  END 
+ END;
 
 SHOW greatest;
+SHOW ++greatest;
+SHOW --greatest;
+SHOW greatest ^ 2;
+SHOW greatest % 4;
+SHOW greatest >= 9;
 
 
