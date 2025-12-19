@@ -21,10 +21,11 @@ IF a > b DO
  END;
 
 SHOW greatest;
-SHOW ++greatest;
-SHOW --greatest;
-SHOW greatest ^ 2;
-SHOW greatest % 4;
-SHOW greatest >= 9;
+
+//SHOW ++greatest;
+//SHOW --greatest;
+//SHOW greatest ^ 2;
+//SHOW greatest % 4;
+//SHOW greatest >= 9;
 
 
